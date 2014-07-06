@@ -119,7 +119,8 @@ end
 # Access the user's Evernote account and display account data
 ##
 get '/list' do
-  begin
+  # begin
+    post_note
     # Get notebooks
     session[:notebooks] = notebooks.map(&:name)
     # Get username
@@ -127,12 +128,42 @@ get '/list' do
     # Get total note count
     session[:total_notes] = total_note_count
     erb :index
-  rescue => e
-    @last_error = "Error listing notebooks: #{e.message}"
-    erb :error
-  end
+  # rescue => e
+  #   @last_error = "Error listing notebooks: #{e.message}"
+  #   erb :error
+  # end
 end
 
+ENML_HEADER = <<HEADER
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+HEADER
+
+def post_note
+  default_notebook_guid = note_store.getDefaultNotebook(auth_token).guid
+
+  books = Dir.new(File.expand_path(File.dirname(__FILE__)) + '/books')
+  books.each do |book|
+    if /\A([^\.]+)\.txt\z/ =~ book
+      puts title = $1.encode('utf-8', 'sjis', :invalid => :replace, :undef => :replace)
+      body = open(books.path + '/' + book).readlines.join("<br />\n")
+        .encode('sjis', 'utf-8', :invalid => :replace, :undef => :replace)
+        .encode('utf-8', 'sjis', :invalid => :replace, :undef => :replace)
+
+      note_content = <<CONTENT
+#{ENML_HEADER}
+<en-note>#{body}</en-note>
+CONTENT
+
+      note = Evernote::EDAM::Type::Note.new
+      note.title        = title
+      note.notebookGuid = default_notebook_guid
+      note.content      = note_content
+
+      note_store.createNote(auth_token, note)
+    end
+  end
+end
 
 __END__
 
